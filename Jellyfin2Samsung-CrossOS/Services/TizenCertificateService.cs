@@ -1,4 +1,4 @@
-﻿using Jellyfin2Samsung.Extensions;
+using Jellyfin2Samsung.Extensions;
 using Jellyfin2Samsung.Helpers;
 using Jellyfin2Samsung.Helpers.Core;
 using Jellyfin2Samsung.Helpers.Tizen.Certificate;
@@ -12,6 +12,7 @@ using Org.BouncyCastle.OpenSsl;
 using Org.BouncyCastle.Pkcs;
 using Org.BouncyCastle.Security;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -92,7 +93,9 @@ namespace Jellyfin2Samsung.Services
 
         private static byte[] GenerateAuthorCsr(AsymmetricCipherKeyPair keyPair)
         {
-            var subject = new X509Name("C=, ST=, L=, O=, OU=, CN=Jelly2Sams");
+            var subject = new X509Name(
+                new ArrayList { X509Name.C, X509Name.ST, X509Name.L, X509Name.O, X509Name.OU, X509Name.CN },
+                new ArrayList { "", "", "", "", "", "Jelly2Sams" });
             var csr = new Pkcs10CertificationRequest("SHA256withRSA", subject, keyPair.Public, null, keyPair.Private);
 
             using var ms = new MemoryStream();
@@ -107,7 +110,9 @@ namespace Jellyfin2Samsung.Services
 
         private static byte[] GenerateDistributorCsr(AsymmetricCipherKeyPair keyPair, string duid, string userEmail)
         {
-            var subject = new X509Name($"CN=TizenSDK, OU=, O=, L=, ST=, C=, emailAddress={userEmail}");
+            var subject = new X509Name(
+                new ArrayList { X509Name.CN, X509Name.OU, X509Name.O, X509Name.L, X509Name.ST, X509Name.C, X509Name.EmailAddress },
+                new ArrayList { "TizenSDK", "", "", "", "", "", userEmail });
             var generalNames = new GeneralNames(new[]
             {
                 new GeneralName(GeneralName.UniformResourceIdentifier, "URN:tizen:packageid="),
