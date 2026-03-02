@@ -88,7 +88,7 @@ namespace Jellyfin2Samsung.Helpers
         public string JellyfinAvReleaseFork { get; set; } = "https://api.github.com/repos/asamahy/tizen-jellyfin-avplay/releases";
         public string JellyfinLegacy { get; set; } = "https://api.github.com/repos/jeppevinkel/jellyfin-tizen-builds/releases/tags/2024-10-27-1821";
         public string CommunityRelease { get; set; } = "https://api.github.com/repos/PatrickSt1991/tizen-community-packages/releases";
-        public string MoonfinRelease { get; set; } = "https://api.github.com/repos/Moonfin-Client/Tizen/releases";
+        public string MoonfinRelease { get; set; } = "https://api.github.com/repos/Moonfin-Client/Smart-TV/releases";
         public string ReleaseInfo { get; set; } = "https://raw.githubusercontent.com/jeppevinkel/jellyfin-tizen-builds/refs/heads/master/README.md";
         public string CommunityInfo { get; set; } = "https://raw.githubusercontent.com/PatrickSt1991/tizen-community-packages/refs/heads/main/README.md";
         public AppSettings() { }

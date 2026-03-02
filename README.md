@@ -115,6 +115,6 @@ This project is made possible by the people who contribute their time, knowledge
 Special thanks to:
 - **jeppevinkel** — for providing the Jellyfin Tizen `.wgt` builds  
   https://github.com/jeppevinkel/jellyfin-tizen-builds
-- **Hungry__Alpaca** — for the Moonfin client and related work  
-  https://github.com/Moonfin-Client/Tizen
+- **@RadicalMuffinMan** — for the Moonfin client and related work  
+  https://github.com/Moonfin-Client/Smart-TV
 
