@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 
 namespace Jellyfin2Samsung.Helpers.Core
@@ -59,6 +60,11 @@ namespace Jellyfin2Samsung.Helpers.Core
         public static bool IsUnixLike => IsLinux || IsMacOS;
 
         /// <summary>
+        /// Returns true if the current process architecture is ARM64.
+        /// </summary>
+        public static bool IsArm64 => RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
+
+        /// <summary>
         /// Gets the appropriate TizenSdb search pattern for the current platform.
         /// </summary>
         /// <returns>The file search pattern for TizenSdb binary.</returns>
@@ -68,7 +74,9 @@ namespace Jellyfin2Samsung.Helpers.Core
             return CurrentPlatform switch
             {
                 Platform.Windows => Constants.PlatformBinaries.TizenSdbWindowsPattern,
-                Platform.Linux => Constants.PlatformBinaries.TizenSdbLinuxPattern,
+                Platform.Linux => IsArm64
+                    ? Constants.PlatformBinaries.TizenSdbLinuxArm64Pattern
+                    : Constants.PlatformBinaries.TizenSdbLinuxX64Pattern,
                 Platform.MacOS => Constants.PlatformBinaries.TizenSdbMacOsPattern,
                 _ => throw new PlatformNotSupportedException("Unsupported operating system")
             };
@@ -85,7 +93,9 @@ namespace Jellyfin2Samsung.Helpers.Core
             return CurrentPlatform switch
             {
                 Platform.Windows => $"TizenSdb_{version}{Constants.PlatformBinaries.WindowsExtension}",
-                Platform.Linux => $"TizenSdb_{version}{Constants.PlatformBinaries.LinuxSuffix}",
+                Platform.Linux => $"TizenSdb_{version}{(IsArm64
+                    ? Constants.PlatformBinaries.LinuxArm64Suffix
+                    : Constants.PlatformBinaries.LinuxX64Suffix)}",
                 Platform.MacOS => $"TizenSdb_{version}{Constants.PlatformBinaries.MacOsSuffix}",
                 _ => throw new PlatformNotSupportedException("Unsupported operating system")
             };
@@ -101,7 +111,7 @@ namespace Jellyfin2Samsung.Helpers.Core
             return CurrentPlatform switch
             {
                 Platform.Windows => "exe",
-                Platform.Linux => "linux",
+                Platform.Linux => IsArm64 ? "linux-arm64" : "linux-x64",
                 Platform.MacOS => "macos",
                 _ => throw new PlatformNotSupportedException("Unsupported operating system")
             };

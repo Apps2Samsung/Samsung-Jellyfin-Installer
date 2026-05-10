@@ -108,10 +108,12 @@ namespace Jellyfin2Samsung.Helpers.Core
         public static class PlatformBinaries
         {
             public const string TizenSdbWindowsPattern = "TizenSdb*.exe";
-            public const string TizenSdbLinuxPattern = "TizenSdb*_linux";
+            public const string TizenSdbLinuxX64Pattern = "TizenSdb*_linux-x64";
+            public const string TizenSdbLinuxArm64Pattern = "TizenSdb*_linux-arm64";
             public const string TizenSdbMacOsPattern = "TizenSdb*_macos";
             public const string WindowsExtension = ".exe";
-            public const string LinuxSuffix = "_linux";
+            public const string LinuxX64Suffix = "_linux-x64";
+            public const string LinuxArm64Suffix = "_linux-arm64";
             public const string MacOsSuffix = "_macos";
             public const string EsbuildWindows = "win-x64";
             public const string EsbuildLinux = "linux-x64";
