@@ -43,13 +43,13 @@ namespace Jellyfin2Samsung.Helpers.Jellyfin.Plugins
                 ["KefinTweaks"]          = () => new KefinTweaksPatch(),
             };
 
-        public PluginMatrixEntry? FindPluginEntry(JellyfinPluginInfo plugin)
+        public PluginMatrixEntry? FindPluginEntry(JellyfinPluginInfo? plugin)
             => FindMatrixEntry(plugin);
 
         public IJellyfinPluginPatch? ResolvePatch(PluginMatrixEntry entry)
             => PatchFactories.TryGetValue(entry.Name, out var factory) ? factory() : null;
 
-        public static PluginMatrixEntry? FindMatrixEntry(JellyfinPluginInfo plugin)
+        public static PluginMatrixEntry? FindMatrixEntry(JellyfinPluginInfo? plugin)
         {
             if (plugin?.Name == null) return null;
 
@@ -59,7 +59,7 @@ namespace Jellyfin2Samsung.Helpers.Jellyfin.Plugins
                 pluginName.Contains(entry.Name, StringComparison.InvariantCultureIgnoreCase));
         }
 
-        public static bool IsSupported(JellyfinPluginInfo plugin)
+        public static bool IsSupported(JellyfinPluginInfo? plugin)
         {
             var entry = FindMatrixEntry(plugin);
             return entry != null && PatchFactories.ContainsKey(entry.Name);
