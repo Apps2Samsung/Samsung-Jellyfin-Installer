@@ -181,8 +181,18 @@ namespace Jellyfin2Samsung.Helpers.Jellyfin.Plugins
         {
             var apiPlugins = await _apiClient.GetInstalledPluginsAsync(serverUrl);
 
+            var disabledIds = (AppSettings.Default.DisabledPluginIds ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             foreach (var plugin in apiPlugins)
             {
+                if (!string.IsNullOrEmpty(plugin?.Id) && disabledIds.Contains(plugin.Id))
+                {
+                    Trace.WriteLine($"⏭ Plugin '{plugin.Name}' opted out by user, skipping.");
+                    continue;
+                }
+
                 var entry = _pluginManager.FindPluginEntry(plugin);
                 if (entry == null) continue;
 

@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using Jellyfin2Samsung.Helpers;
 using Jellyfin2Samsung.Helpers.API;
 using Jellyfin2Samsung.Helpers.Core;
+using Jellyfin2Samsung.Helpers.Jellyfin.Plugins;
 using Jellyfin2Samsung.Helpers.Tizen.Certificate;
 using Jellyfin2Samsung.Interfaces;
 using Jellyfin2Samsung.Models;
@@ -196,6 +197,7 @@ namespace Jellyfin2Samsung.ViewModels
         public ObservableCollection<ExistingCertificates> AvailableCertificates { get; } = new();
         public ObservableCollection<JellyfinUser> AvailableJellyfinUsers { get; } = new();
         public ObservableCollection<JellyfinUser> SelectedJellyfinUsers { get; }
+        public ObservableCollection<InstalledPluginItem> InstalledPlugins { get; } = new();
         public ObservableCollection<NetworkInterfaceOption> NetworkInterfaces { get; } = new();
         // ========== End Main Settings Properties ==========
 
@@ -283,6 +285,9 @@ namespace Jellyfin2Samsung.ViewModels
         public string LblSelectUsers => _localizationService.GetString("lblSelectUsers");
         public string LblRefreshUsers => _localizationService.GetString("lblRefreshUsers");
         public string LblUserSelectionHint => _localizationService.GetString("lblUserSelectionHint");
+        public string LblInstalledPlugins => _localizationService.GetString("lblInstalledPlugins");
+        public string LblInstalledPluginsHint => _localizationService.GetString("lblInstalledPluginsHint");
+        public string LblPluginUnsupported => _localizationService.GetString("lblPluginUnsupported");
         public string LblValidateStream => _localizationService.GetString("lblValidateStream");
 
         // New Tab and UI labels
@@ -420,6 +425,9 @@ namespace Jellyfin2Samsung.ViewModels
             OnPropertyChanged(nameof(LblSelectUsers));
             OnPropertyChanged(nameof(LblRefreshUsers));
             OnPropertyChanged(nameof(LblUserSelectionHint));
+            OnPropertyChanged(nameof(LblInstalledPlugins));
+            OnPropertyChanged(nameof(LblInstalledPluginsHint));
+            OnPropertyChanged(nameof(LblPluginUnsupported));
             OnPropertyChanged(nameof(LblValidateStream));
             // New tab and UI labels
             OnPropertyChanged(nameof(LblTabServer));
@@ -637,6 +645,8 @@ namespace Jellyfin2Samsung.ViewModels
                 {
                     await LoadJellyfinUsersAsync();
                 }
+
+                await LoadInstalledPluginsAsync();
             }
             else
             {
@@ -644,6 +654,62 @@ namespace Jellyfin2Samsung.ViewModels
                 IsJellyfinAdmin = false;
                 AuthenticationStatus = error ?? "Failed";
             }
+        }
+
+        /// <summary>
+        /// Pulls the server's installed-plugin list, marks each as supported (we have a patch)
+        /// or unsupported, and pre-selects everything that wasn't previously opted out.
+        /// </summary>
+        private async Task LoadInstalledPluginsAsync()
+        {
+            try
+            {
+                var serverUrl = UrlHelper.NormalizeServerUrl(AppSettings.Default.JellyfinFullUrl);
+                var plugins = await _jellyfinApiClient.GetInstalledPluginsAsync(serverUrl);
+
+                var disabled = (AppSettings.Default.DisabledPluginIds ?? "")
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    foreach (var existing in InstalledPlugins)
+                        existing.PropertyChanged -= OnInstalledPluginChanged;
+                    InstalledPlugins.Clear();
+
+                    foreach (var p in plugins.OrderBy(p => p.Name))
+                    {
+                        var supported = PluginManager.IsSupported(p);
+                        var item = new InstalledPluginItem
+                        {
+                            Id = p.Id ?? "",
+                            Name = p.Name ?? "",
+                            Version = p.Version,
+                            IsSupported = supported,
+                            // Default supported plugins to selected; respect a previous opt-out.
+                            IsSelected = supported && !disabled.Contains(p.Id ?? "")
+                        };
+                        item.PropertyChanged += OnInstalledPluginChanged;
+                        InstalledPlugins.Add(item);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"[LoadInstalledPlugins] Error: {ex}");
+            }
+        }
+
+        private void OnInstalledPluginChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(InstalledPluginItem.IsSelected)) return;
+
+            var disabledIds = InstalledPlugins
+                .Where(p => p.IsSupported && !p.IsSelected && !string.IsNullOrEmpty(p.Id))
+                .Select(p => p.Id);
+
+            AppSettings.Default.DisabledPluginIds = string.Join(",", disabledIds);
+            AppSettings.Default.Save();
         }
 
         /// <summary>
@@ -699,6 +765,11 @@ namespace Jellyfin2Samsung.ViewModels
             // Clear user collections
             AvailableJellyfinUsers.Clear();
             SelectedJellyfinUsers.Clear();
+
+            // Clear plugin inventory
+            foreach (var p in InstalledPlugins)
+                p.PropertyChanged -= OnInstalledPluginChanged;
+            InstalledPlugins.Clear();
 
             // Notify command state changed
             LogoutCommand.NotifyCanExecuteChanged();
@@ -1262,6 +1333,8 @@ namespace Jellyfin2Samsung.ViewModels
                 {
                     _ = LoadJellyfinUsersAsync();
                 }
+
+                _ = LoadInstalledPluginsAsync();
             }
 
             SelectedTheme = AppSettings.Default.SelectedTheme ?? "dark";
