@@ -4,6 +4,7 @@ using Jellyfin2Samsung.Helpers.Jellyfin.Plugins.KefinTweaks;
 using Jellyfin2Samsung.Interfaces;
 using Jellyfin2Samsung.Models;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
