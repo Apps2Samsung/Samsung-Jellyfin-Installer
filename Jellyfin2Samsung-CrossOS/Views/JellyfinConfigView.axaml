@@ -8,7 +8,7 @@
         x:Class="Jellyfin2Samsung.JellyfinConfigView"
         x:DataType="viewModels:JellyfinConfigViewModel"
         Title="Settings"
-        Width="715"
+        Width="730"
         Height="850">
 
 	<Window.Styles>
@@ -79,7 +79,7 @@
 
 				<!-- TAB 1: Main Settings (Application Settings) -->
 				<TabItem Header="{Binding LblTabMainSettings}">
-					<ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,12,0">
+					<ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,20,0">
 						<StackPanel Spacing="16">
 
 							<!-- Application Settings Section -->
@@ -255,7 +255,7 @@
 
 				<!-- TAB 2: Server & Auto-Login -->
 				<TabItem Header="{Binding LblTabServer}">
-					<ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,12,0">
+					<ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,20,0">
 						<StackPanel Spacing="16">
 
 							<!-- Server Settings Section -->
@@ -648,7 +648,7 @@
 
 				<!-- TAB 3: Playback (Browser Settings) -->
 				<TabItem Header="{Binding LblTabPlayback}">
-					<ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,12,0">
+					<ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,20,0">
 						<StackPanel Spacing="12" IsEnabled="{Binding IsAuthenticated}">
 							<TextBlock Text="{Binding LblBrowserSettings}"
 									   FontSize="15"
@@ -733,7 +733,7 @@
 
 				<!-- TAB 4: CSS Style -->
 				<TabItem Header="{Binding LblTabCss}">
-					<ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,12,0">
+					<ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,20,0">
 						<StackPanel Spacing="12">
 							<TextBlock Text="{Binding LblCssSettings}"
 									   FontSize="15"
