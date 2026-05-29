@@ -16,8 +16,10 @@ using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace Jellyfin2Samsung.ViewModels
@@ -324,6 +326,8 @@ namespace Jellyfin2Samsung.ViewModels
         public string LblSettingsHeader => _localizationService.GetString("lblSettings");
         public string LblGitHubToken => _localizationService.GetString("lblGitHubToken");
         public string LblGitHubTokenHint => _localizationService.GetString("lblGitHubTokenHint");
+        public string LblOpenLogsFolder => _localizationService.GetString("lblOpenLogsFolder");
+        public string LblJellyfinOnlyNotice => _localizationService.GetString("lblJellyfinOnlyNotice");
         public char GitHubTokenPasswordChar => ShowGitHubToken ? '\0' : '*';
 
         public bool CanLogin => ServerValidated &&
@@ -459,6 +463,8 @@ namespace Jellyfin2Samsung.ViewModels
             OnPropertyChanged(nameof(LblSettingsHeader));
             OnPropertyChanged(nameof(LblGitHubToken));
             OnPropertyChanged(nameof(LblGitHubTokenHint));
+            OnPropertyChanged(nameof(LblOpenLogsFolder));
+            OnPropertyChanged(nameof(LblJellyfinOnlyNotice));
         }
 
         partial void OnAudioLanguagePreferenceChanged(string? value)
@@ -1205,6 +1211,56 @@ namespace Jellyfin2Samsung.ViewModels
             SelectedJellyThemePreview = await LoadPreviewAsync(theme.PreviewUrl);
 
             await ValidateCssAsync();
+        }
+
+        [RelayCommand]
+        private void OpenLogsFolder()
+        {
+            try
+            {
+                var logFolder = Path.Combine(AppContext.BaseDirectory, "Logs");
+                Directory.CreateDirectory(logFolder);
+
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = $"\"{logFolder}\"",
+                        UseShellExecute = true
+                    });
+                }
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "open",
+                        Arguments = $"\"{logFolder}\"",
+                        UseShellExecute = false
+                    });
+                }
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "xdg-open",
+                        Arguments = $"\"{logFolder}\"",
+                        UseShellExecute = false
+                    });
+                }
+                else
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = logFolder,
+                        UseShellExecute = true
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"Failed to open Logs folder: {ex}");
+            }
         }
 
         [RelayCommand]

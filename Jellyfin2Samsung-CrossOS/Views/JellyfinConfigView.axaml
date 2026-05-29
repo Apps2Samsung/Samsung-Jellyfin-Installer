@@ -249,6 +249,27 @@
 								</Grid>
 							</StackPanel>
 
+							<Border Height="1" Background="{DynamicResource SystemControlForegroundBaseMediumLowBrush}" Margin="0,4"/>
+
+							<!-- Diagnostics Section -->
+							<StackPanel Spacing="12">
+								<Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+									<TextBlock Grid.Column="0"
+											   Text="{Binding LblOpenLogsFolder}"
+											   Classes="label"
+											   VerticalAlignment="Center"/>
+									<Button Grid.Column="1"
+											Classes="secondary"
+											Command="{Binding OpenLogsFolderCommand}"
+											Padding="10,6">
+										<StackPanel Orientation="Horizontal" Spacing="6">
+											<fa:SymbolIcon Symbol="Folder" Width="16" Height="16"/>
+											<TextBlock Text="{Binding LblOpenLogsFolder}"/>
+										</StackPanel>
+									</Button>
+								</Grid>
+							</StackPanel>
+
 						</StackPanel>
 					</ScrollViewer>
 				</TabItem>
@@ -257,6 +278,23 @@
 				<TabItem Header="{Binding LblTabServer}">
 					<ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,20,0">
 						<StackPanel Spacing="16">
+
+							<!-- Jellyfin-only notice -->
+							<Border Background="#FFF3CD"
+									CornerRadius="4"
+									Padding="10,8"
+									BorderBrush="#FFE69C"
+									BorderThickness="1">
+								<StackPanel Orientation="Horizontal" Spacing="8">
+									<fa:SymbolIcon Symbol="Important" Width="16" Height="16" Foreground="#856404" VerticalAlignment="Center"/>
+									<TextBlock Text="{Binding LblJellyfinOnlyNotice}"
+											   Foreground="#856404"
+											   FontSize="12"
+											   FontWeight="SemiBold"
+											   TextWrapping="Wrap"
+											   VerticalAlignment="Center"/>
+								</StackPanel>
+							</Border>
 
 							<!-- Server Settings Section -->
 							<StackPanel Spacing="12">
@@ -649,7 +687,26 @@
 				<!-- TAB 3: Playback (Browser Settings) -->
 				<TabItem Header="{Binding LblTabPlayback}">
 					<ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,20,0">
-						<StackPanel Spacing="12" IsEnabled="{Binding IsAuthenticated}">
+						<StackPanel Spacing="12">
+
+							<!-- Jellyfin-only notice -->
+							<Border Background="#FFF3CD"
+									CornerRadius="4"
+									Padding="10,8"
+									BorderBrush="#FFE69C"
+									BorderThickness="1">
+								<StackPanel Orientation="Horizontal" Spacing="8">
+									<fa:SymbolIcon Symbol="Important" Width="16" Height="16" Foreground="#856404" VerticalAlignment="Center"/>
+									<TextBlock Text="{Binding LblJellyfinOnlyNotice}"
+											   Foreground="#856404"
+											   FontSize="12"
+											   FontWeight="SemiBold"
+											   TextWrapping="Wrap"
+											   VerticalAlignment="Center"/>
+								</StackPanel>
+							</Border>
+
+							<StackPanel Spacing="12" IsEnabled="{Binding IsAuthenticated}">
 							<TextBlock Text="{Binding LblBrowserSettings}"
 									   FontSize="15"
 									   FontWeight="SemiBold"
@@ -727,6 +784,7 @@
 										  SelectedItem="{Binding SelectedSubtitleMode}"
 										  Classes="clean"/>
 							</Grid>
+							</StackPanel>
 						</StackPanel>
 					</ScrollViewer>
 				</TabItem>
@@ -735,6 +793,24 @@
 				<TabItem Header="{Binding LblTabCss}">
 					<ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,20,0">
 						<StackPanel Spacing="12">
+
+							<!-- Jellyfin-only notice -->
+							<Border Background="#FFF3CD"
+									CornerRadius="4"
+									Padding="10,8"
+									BorderBrush="#FFE69C"
+									BorderThickness="1">
+								<StackPanel Orientation="Horizontal" Spacing="8">
+									<fa:SymbolIcon Symbol="Important" Width="16" Height="16" Foreground="#856404" VerticalAlignment="Center"/>
+									<TextBlock Text="{Binding LblJellyfinOnlyNotice}"
+											   Foreground="#856404"
+											   FontSize="12"
+											   FontWeight="SemiBold"
+											   TextWrapping="Wrap"
+											   VerticalAlignment="Center"/>
+								</StackPanel>
+							</Border>
+
 							<TextBlock Text="{Binding LblCssSettings}"
 									   FontSize="15"
 									   FontWeight="SemiBold"
