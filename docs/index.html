@@ -99,6 +99,13 @@
       background: rgba(124,140,255,0.08);
       color: #c5cbf0;
     }
+    /* highlight the visitor's detected OS */
+    .chip.detected {
+      border: 1px solid rgba(97,218,251,0.7);
+      background: rgba(97,218,251,0.15);
+      color: #eef1ff;
+      box-shadow: 0 0 0 1px rgba(97,218,251,0.25);
+    }
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -116,6 +123,38 @@
     }
     .card strong { color: #eef1ff; display: block; margin-bottom: 2px; }
     .card span { color: #96a0c3; }
+    /* download list rows */
+    .dl-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      text-align: left;
+      margin: 8px 0 4px;
+    }
+    .dl-grid .card.detected {
+      border: 1px solid rgba(97,218,251,0.5);
+      background: rgba(97,218,251,0.06);
+    }
+    .dlrow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 6px 10px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .dlrow:first-of-type { border-top: 0; padding-top: 0; }
+    .dlrow .arch { color: #c5cbf0; font-weight: 600; min-width: 92px; }
+    .dlrow a {
+      color: #61dafb;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(97,218,251,0.3);
+      font-size: .92em;
+    }
+    .dlrow a:hover { border-bottom-color: #61dafb; }
+    .dlrow .sz { color: #6b7494; font-size: .8em; }
+    .note { color: #6b7494; font-size: .8em; margin-top: 6px; }
     /* Responsive video container */
     .video-wrapper {
       position: relative;
@@ -150,18 +189,24 @@
     </div>
 
     <div class="meta">
-      <span class="chip solid">🪟 Windows</span>
-      <span class="chip solid">🍎 macOS</span>
-      <span class="chip solid">🐧 Linux</span>
+      <span class="chip solid" data-os="win">🪟 Windows</span>
+      <span class="chip solid" data-os="macos">🍎 macOS</span>
+      <span class="chip solid" data-os="linux">🐧 Linux</span>
       <br/>
       <span class="chip">Latest version: <strong id="latestVersion">checking…</strong></span>
       <span class="chip">Released on <strong id="releaseDate">—</strong></span>
     </div>
 
     <p>
-      <a id="downloadBtn" class="btn" href="#" target="_blank" rel="noopener">⬇️ Download</a>
+      <a id="downloadBtn" class="btn" href="#" target="_blank" rel="noopener">⬇️ <span id="downloadLabel">Download</span></a>
       <a class="btn" href="https://github.com/Jellyfin2Samsung/Samsung-Jellyfin-Installer" target="_blank" rel="noopener">🧰 Source Code</a>
     </p>
+
+    <h3>All downloads</h3>
+    <div id="allDownloads" class="dl-grid">
+      <div class="card"><span>Loading builds…</span></div>
+    </div>
+    <p class="note" id="archNote"></p>
 
     <h3>Apps you can install</h3>
     <div class="grid">
@@ -204,43 +249,142 @@
   (async function(){
     const owner='Jellyfin2Samsung', repo='Samsung-Jellyfin-Installer';
     const els={
-      ver:document.getElementById('latestVersion'),
-      date:document.getElementById('releaseDate'),
-      dl:document.getElementById('downloadBtn')
+      ver:   document.getElementById('latestVersion'),
+      date:  document.getElementById('releaseDate'),
+      dl:    document.getElementById('downloadBtn'),
+      label: document.getElementById('downloadLabel'),
+      all:   document.getElementById('allDownloads'),
+      note:  document.getElementById('archNote')
     };
 
-    const os=(()=>{
-      const p=(navigator.userAgentData?.platform||navigator.platform||'').toLowerCase();
-      if(p.includes('win'))return'win';
-      if(p.includes('mac'))return'osx';
-      if(p.includes('linux'))return'linux';
-      return'other';
-    })();
+    const OS_LABEL   = { win:'🪟 Windows', macos:'🍎 macOS', linux:'🐧 Linux' };
+    const ARCH_LABEL = { x64:'x64 / Intel', arm64:'ARM64' };
+    // Preferred format per OS, most-recommended first (used for sorting + default pick).
+    const PREF       = { win:['msi','zip'], macos:['dmg','tar.gz'], linux:['deb','tar.gz'] };
+    const OS_ORDER   = ['win','macos','linux'];
+    const ARCH_ORDER = ['x64','arm64'];
+
+    // ---- platform detection -------------------------------------------------
+    function detectOS(){
+      const p=(navigator.userAgentData?.platform||navigator.platform||navigator.userAgent||'').toLowerCase();
+      if(p.includes('win')) return 'win';
+      if(p.includes('mac')) return 'macos';
+      if(p.includes('linux')||p.includes('android')) return 'linux';
+      return null;
+    }
+
+    async function detectArch(os){
+      // Chromium exposes the real CPU arch via UA Client Hints (async, https only).
+      try{
+        if(navigator.userAgentData?.getHighEntropyValues){
+          const h=await navigator.userAgentData.getHighEntropyValues(['architecture']);
+          if(h.architecture==='arm') return {arch:'arm64', sure:true};
+          if(h.architecture==='x86') return {arch:'x64',   sure:true};
+        }
+      }catch(e){/* ignore */}
+      const ua=(navigator.userAgent||'').toLowerCase();
+      if(ua.includes('arm64')||ua.includes('aarch64')) return {arch:'arm64', sure:true};
+      // Safari / Firefox give us nothing reliable. Apple Silicon is the majority of
+      // active Macs, so default macOS to arm64 but flag it as a guess.
+      if(os==='macos') return {arch:'arm64', sure:false};
+      return {arch:'x64', sure:false};
+    }
+
+    function parseAsset(name){
+      const m=name.match(/-(linux|macos|win)-(x64|arm64)\.(.+)$/i);
+      return m ? { os:m[1].toLowerCase(), arch:m[2].toLowerCase(), ext:m[3].toLowerCase() } : null;
+    }
 
     const fmtDate=s=>new Date(s).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'2-digit'});
+    const fmtSize=b=>b ? (b/1048576).toFixed(1)+' MB' : '';
+
     async function tryFetch(u){
       const r=await fetch(u,{headers:{'Accept':'application/vnd.github+json'},cache:'no-store'});
-      if(!r.ok)throw new Error(r.status);
+      if(!r.ok) throw new Error(r.status);
       return r.json();
     }
 
-    async function getRelease(){
-      const d=await tryFetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`);
-      const tag=d.tag_name||d.name, date=d.published_at||d.created_at;
-      let a=d.assets?.find(x=>x.name.toLowerCase().includes(`-${os}-x64`));
-      if(!a&&d.assets?.length)a=d.assets[0];
-      const href=a?a.browser_download_url:`https://github.com/${owner}/${repo}/archive/refs/tags/${encodeURIComponent(tag)}.zip`;
-      return{tag,date,href};
-    }
+    function releasesUrl(){ return `https://github.com/${owner}/${repo}/releases/latest`; }
 
     try{
-      const i=await getRelease();
-      els.ver.textContent=i.tag;
-      els.date.textContent=fmtDate(i.date);
-      els.dl.href=i.href;
+      const d=await tryFetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`);
+      const tag=d.tag_name||d.name, date=d.published_at||d.created_at;
+      els.ver.textContent=tag||'unknown';
+      els.date.textContent=date?fmtDate(date):'n/a';
+
+      // Group assets: os -> arch -> [ {ext,url,size} ]
+      const groups={};
+      for(const a of (d.assets||[])){
+        const p=parseAsset(a.name);
+        if(!p) continue;
+        (groups[p.os] = groups[p.os] || {});
+        (groups[p.os][p.arch] = groups[p.os][p.arch] || []);
+        groups[p.os][p.arch].push({ ext:p.ext, url:a.browser_download_url, size:a.size });
+      }
+      // Sort each arch's files by preferred format.
+      for(const os in groups){
+        const pref=PREF[os]||[];
+        for(const arch in groups[os]){
+          groups[os][arch].sort((x,y)=>{
+            const ix=pref.indexOf(x.ext), iy=pref.indexOf(y.ext);
+            return (ix<0?99:ix)-(iy<0?99:iy);
+          });
+        }
+      }
+
+      // ---- pick the best default download for this visitor -----------------
+      const os=detectOS();
+      const { arch, sure }=await detectArch(os);
+      let best=null, bestArch=arch;
+      if(os && groups[os]){
+        let list=groups[os][arch];
+        if(!list){ bestArch=Object.keys(groups[os])[0]; list=groups[os][bestArch]; }
+        if(list && list.length) best=list[0];
+      }
+
+      if(best){
+        els.dl.href=best.url;
+        els.label.textContent=`Download for ${OS_LABEL[os]} · ${ARCH_LABEL[bestArch]||bestArch}`;
+      }else{
+        els.dl.href=releasesUrl();
+        els.label.textContent='View all downloads';
+      }
+
+      // Highlight the detected OS chip up top.
+      if(os){
+        const chip=document.querySelector(`.chip[data-os="${os}"]`);
+        if(chip) chip.classList.add('detected');
+      }
+
+      // ---- render the full grouped list ------------------------------------
+      let html='';
+      for(const o of OS_ORDER){
+        if(!groups[o]) continue;
+        const isDetected = (o===os);
+        html+=`<div class="card${isDetected?' detected':''}"><strong>${OS_LABEL[o]}${isDetected?' — your system':''}</strong>`;
+        for(const ar of ARCH_ORDER){
+          const list=groups[o][ar];
+          if(!list || !list.length) continue;
+          const links=list.map(it=>{
+            const sz=fmtSize(it.size);
+            return `<a href="${it.url}">.${it.ext}</a>${sz?` <span class="sz">${sz}</span>`:''}`;
+          }).join(' · ');
+          html+=`<div class="dlrow"><span class="arch">${ARCH_LABEL[ar]||ar}</span> ${links}</div>`;
+        }
+        html+='</div>';
+      }
+      els.all.innerHTML = html || `<div class="card"><span>No platform builds found — <a href="${releasesUrl()}" style="color:#61dafb">see the release page</a>.</span></div>`;
+
+      // Note when the architecture is only a best guess (Safari/Firefox on Mac).
+      if(os==='macos' && !sure){
+        els.note.textContent='macOS chip type can\u2019t be detected in this browser — defaulted to Apple Silicon (ARM64). On an Intel Mac, pick the x64 build above.';
+      }
     }catch(e){
       els.ver.textContent='unavailable';
       els.date.textContent='n/a';
+      els.dl.href=releasesUrl();
+      els.label.textContent='View downloads on GitHub';
+      els.all.innerHTML=`<div class="card"><span>Couldn\u2019t load builds right now — <a href="${releasesUrl()}" style="color:#61dafb">open the latest release</a>.</span></div>`;
     }
 
     document.getElementById('year').textContent=new Date().getFullYear();
