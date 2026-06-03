@@ -77,7 +77,9 @@ namespace Jellyfin2Samsung.Helpers.Core
                 Platform.Linux => IsArm64
                     ? Constants.PlatformBinaries.TizenSdbLinuxArm64Pattern
                     : Constants.PlatformBinaries.TizenSdbLinuxX64Pattern,
-                Platform.MacOS => Constants.PlatformBinaries.TizenSdbMacOsPattern,
+                Platform.MacOS => IsArm64
+                    ? Constants.PlatformBinaries.TizenSdbMacOsArm64Pattern
+                    : Constants.PlatformBinaries.TizenSdbMacOsPattern,
                 _ => throw new PlatformNotSupportedException("Unsupported operating system")
             };
         }
@@ -96,7 +98,9 @@ namespace Jellyfin2Samsung.Helpers.Core
                 Platform.Linux => $"TizenSdb_{version}{(IsArm64
                     ? Constants.PlatformBinaries.LinuxArm64Suffix
                     : Constants.PlatformBinaries.LinuxX64Suffix)}",
-                Platform.MacOS => $"TizenSdb_{version}{Constants.PlatformBinaries.MacOsSuffix}",
+                Platform.MacOS => $"TizenSdb_{version}{(IsArm64
+                    ? Constants.PlatformBinaries.MacArm64Suffix
+                    : Constants.PlatformBinaries.MacX64Suffix)}",
                 _ => throw new PlatformNotSupportedException("Unsupported operating system")
             };
         }
@@ -112,7 +116,7 @@ namespace Jellyfin2Samsung.Helpers.Core
             {
                 Platform.Windows => "exe",
                 Platform.Linux => IsArm64 ? "linux-arm64" : "linux-x64",
-                Platform.MacOS => "macos",
+                Platform.MacOS => IsArm64 ? "macos-arm64" : "macos-x64",
                 _ => throw new PlatformNotSupportedException("Unsupported operating system")
             };
         }
