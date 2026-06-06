@@ -37,6 +37,7 @@ namespace Apps2Samsung.Helpers
         public string UserCustomIP { get; set; } = "";
         public string SavedNetworkInterfaceName { get; set; } = "";
         public bool ForceSamsungLogin { get; set; } = false;
+        public bool ShowAllJellyfinVersions { get; set; } = false;
         public bool RTLReading { get; set; } = false;
         public string JellyfinIP { get; set; } = "";
         public string JellyfinBasePath { get; set; } = "";
