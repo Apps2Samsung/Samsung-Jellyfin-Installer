@@ -4,8 +4,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Apps2Samsung.Helpers;
 using Apps2Samsung.Helpers.Core;
+using Apps2Samsung.Interfaces;
 using Apps2Samsung.Models;
 using Apps2Samsung.Services;
+using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -36,8 +38,43 @@ namespace Apps2Samsung.ViewModels
         private bool _isLoading;
         private int _rebuildVersion;
 
+        private readonly ILocalizationService _localizationService =
+            App.Services.GetRequiredService<ILocalizationService>();
+
+        private string L(string key) => _localizationService.GetString(key);
+
+        // Localized labels for the catalog window.
+        public string LblCatalogTitle => L("catalogTitle");
+        public string LblCatalogSubtitle => L("catalogSubtitle");
+        public string LblJellyfinBuilds => L("catalogJellyfinBuilds");
+        public string LblCommunityApps => L("catalogCommunityApps");
+        public string LblAppPreview => L("catalogAppPreview");
+        public string LblColFileName => L("catalogColFileName");
+        public string LblColDescription => L("catalogColDescription");
+        public string LblColApplication => L("catalogColApplication");
+        public string LblNoPreview => L("catalogNoPreview");
+        public string LblNoThumbnail => L("catalogNoThumbnail");
+        public string LblClose => L("btn_Close");
+
+        private void RefreshLocalizedLabels()
+        {
+            OnPropertyChanged(nameof(LblCatalogTitle));
+            OnPropertyChanged(nameof(LblCatalogSubtitle));
+            OnPropertyChanged(nameof(LblJellyfinBuilds));
+            OnPropertyChanged(nameof(LblCommunityApps));
+            OnPropertyChanged(nameof(LblAppPreview));
+            OnPropertyChanged(nameof(LblColFileName));
+            OnPropertyChanged(nameof(LblColDescription));
+            OnPropertyChanged(nameof(LblColApplication));
+            OnPropertyChanged(nameof(LblNoPreview));
+            OnPropertyChanged(nameof(LblNoThumbnail));
+            OnPropertyChanged(nameof(LblClose));
+        }
+
         public BuildInfoViewModel()
         {
+            _localizationService.LanguageChanged += (_, __) => RefreshLocalizedLabels();
+
             CommunityApps.CollectionChanged += (_, __) =>
             {
                 if (_isLoading) return;

@@ -167,5 +167,15 @@
   "lblChannelUrl": "m3u8 URL",
   "lblAddChannel": "Add channel",
   "lblNoChannels": "No channels yet. Click \"Add channel\" to create one.",
-  "lblTvAppOnlyNotice": "These settings apply ONLY to TVApp — they are written into the package before installation."
+  "lblTvAppOnlyNotice": "These settings apply ONLY to TVApp — they are written into the package before installation.",
+  "catalogTitle": "App Catalog",
+  "catalogSubtitle": "Everything you can install on your Samsung device",
+  "catalogJellyfinBuilds": "Jellyfin builds",
+  "catalogCommunityApps": "Community applications",
+  "catalogAppPreview": "App preview",
+  "catalogColFileName": "File name",
+  "catalogColDescription": "Description",
+  "catalogColApplication": "Application",
+  "catalogNoPreview": "No preview available",
+  "catalogNoThumbnail": "This app has no thumbnail yet."
 }
