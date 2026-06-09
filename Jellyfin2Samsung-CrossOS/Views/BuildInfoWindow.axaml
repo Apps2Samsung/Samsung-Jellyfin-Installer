@@ -60,12 +60,12 @@
 					Padding="24,16"
 					Margin="0,0,0,16">
 				<StackPanel Spacing="2" HorizontalAlignment="Center">
-					<TextBlock Text="App Catalog"
+					<TextBlock Text="{Binding LblCatalogTitle}"
 							   Foreground="White"
 							   FontWeight="SemiBold"
 							   FontSize="18"
 							   HorizontalAlignment="Center"/>
-					<TextBlock Text="Everything you can install on your Samsung device"
+					<TextBlock Text="{Binding LblCatalogSubtitle}"
 							   Foreground="#B9C9DA"
 							   FontSize="12"
 							   HorizontalAlignment="Center"/>
@@ -77,7 +77,7 @@
 						Orientation="Horizontal"
 						HorizontalAlignment="Right"
 						Margin="0,16,0,0">
-				<Button Content="Close"
+				<Button Content="{Binding LblClose}"
 						Classes="primary"
 						Width="110"
 						Command="{Binding CloseCommand}"/>
@@ -91,7 +91,7 @@
 				<StackPanel Grid.Column="0" Spacing="18">
 
 					<StackPanel Spacing="8">
-						<TextBlock Text="Jellyfin builds" Classes="subtitle"/>
+						<TextBlock Text="{Binding LblJellyfinBuilds}" Classes="subtitle"/>
 						<Border Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
 								BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
 								BorderThickness="1"
@@ -104,9 +104,9 @@
 									  IsReadOnly="True"
 									  ColumnWidth="*">
 								<DataGrid.Columns>
-									<DataGridTextColumn Header="File name" Width="200"
+									<DataGridTextColumn Header="{Binding LblColFileName}" Width="200"
 														Binding="{Binding FileName}" />
-									<DataGridTemplateColumn Header="Description" Width="*">
+									<DataGridTemplateColumn Header="{Binding LblColDescription}" Width="*">
 										<DataGridTemplateColumn.CellTemplate>
 											<DataTemplate>
 												<TextBlock Text="{Binding Description}"
@@ -122,7 +122,7 @@
 					</StackPanel>
 
 					<StackPanel Spacing="8">
-						<TextBlock Text="Community applications" Classes="subtitle"/>
+						<TextBlock Text="{Binding LblCommunityApps}" Classes="subtitle"/>
 						<Border Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
 								BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
 								BorderThickness="1"
@@ -135,9 +135,9 @@
 									  IsReadOnly="True"
 									  ColumnWidth="*">
 								<DataGrid.Columns>
-									<DataGridTextColumn Header="Application" Width="200"
+									<DataGridTextColumn Header="{Binding LblColApplication}" Width="200"
 														Binding="{Binding FileName}" />
-									<DataGridTemplateColumn Header="Description" Width="*">
+									<DataGridTemplateColumn Header="{Binding LblColDescription}" Width="*">
 										<DataGridTemplateColumn.CellTemplate>
 											<DataTemplate>
 												<TextBlock Text="{Binding Description}"
@@ -160,7 +160,7 @@
 							Spacing="8"
 							x:CompileBindings="False">
 
-					<TextBlock Text="App preview" Classes="subtitle"/>
+					<TextBlock Text="{Binding LblAppPreview}" Classes="subtitle"/>
 
 					<ComboBox ItemsSource="{Binding ProviderOptions}"
 							  SelectedItem="{Binding SelectedProviderOption, Mode=TwoWay}"
@@ -184,12 +184,12 @@
 											   FontSize="40"
 											   Opacity="0.35"
 											   HorizontalAlignment="Center"/>
-								<TextBlock Text="No preview available"
+								<TextBlock Text="{Binding LblNoPreview}"
 										   FontWeight="SemiBold"
 										   FontSize="14"
 										   Opacity="0.8"
 										   HorizontalAlignment="Center"/>
-								<TextBlock Text="This app has no thumbnail yet."
+								<TextBlock Text="{Binding LblNoThumbnail}"
 										   Opacity="0.55"
 										   FontSize="12"
 										   HorizontalAlignment="Center"/>
