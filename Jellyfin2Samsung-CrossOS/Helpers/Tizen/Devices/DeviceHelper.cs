@@ -38,6 +38,9 @@ namespace Apps2Samsung.Helpers.Tizen.Devices
                     try
                     {
                         var samsungDevice = await _tizenApiClient.GetDeveloperInfoAsync(device);
+                        // GetDeveloperInfoAsync returns a fresh object, so carry over whether the
+                        // debug port was reachable (i.e. whether the TV is actually installable).
+                        samsungDevice.DebugPortOpen = device.DebugPortOpen;
                         if (!string.IsNullOrEmpty(samsungDevice.DeviceName))
                             devices.Add(samsungDevice);
                     }
