@@ -91,6 +91,7 @@ namespace Apps2Samsung.Helpers
         public string GitHubToken { get; set; } = "";
         public string LocalYoutubeServer { get; set; } = string.Empty;
         public string TvAppChannelsJson { get; set; } = "";  // JSON array of {name,url} for TVApp
+        public bool TvAppUseOblongIcon { get; set; } = false;  // swap TVApp's icon for the 16:9 Tizen 5.5 variant
 
         // ----- Updater settings -----
         public bool CheckForUpdatesOnStartup { get; set; } = true;
