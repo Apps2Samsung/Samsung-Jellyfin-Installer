@@ -13,7 +13,7 @@ namespace Apps2Samsung.Helpers.Tizen.Certificate
 {
     public class CertificateHelper
     {
-        public List<ExistingCertificates> GetAvailableCertificates(string certificateFolders)
+        public List<ExistingCertificates> GetAvailableCertificates(params string[] certificateFolders)
         {
             var certificates = new List<ExistingCertificates>();
             var cipherUtil = new CipherUtil();
@@ -28,14 +28,14 @@ namespace Apps2Samsung.Helpers.Tizen.Certificate
                 ExpireDate = null
             });
 
-            if (!Directory.Exists(certificateFolders))
-                return certificates;
-
-
-            var p12Files = Directory.GetFiles(
-                certificateFolders,
-                "author.p12",
-                SearchOption.AllDirectories);
+            // Scan every supplied root: the per-user generated certs and the shipped bundled default.
+            var p12Files = new List<string>();
+            foreach (var folder in certificateFolders)
+            {
+                if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
+                    continue;
+                p12Files.AddRange(Directory.GetFiles(folder, "author.p12", SearchOption.AllDirectories));
+            }
 
             foreach (var p12Path in p12Files)
             {
@@ -93,9 +93,18 @@ namespace Apps2Samsung.Helpers.Tizen.Certificate
 
                     if (cert.NotAfter.Date >= DateTime.Today)
                     {
+                        var name = cert.GetNameInfo(X509NameType.SimpleName, forIssuer: false);
+
+                        // The same cert can appear in more than one scanned root (e.g. a copy
+                        // migrated to the user dir while an old copy still sits in the bundle).
+                        // Keep the first occurrence (user dir is scanned first).
+                        bool alreadyAdded = certificates.Exists(c => c.Name == name && c.Duid == duid);
+                        if (alreadyAdded)
+                            continue;
+
                         certificates.Add(new ExistingCertificates
                         {
-                            Name = cert.GetNameInfo(X509NameType.SimpleName, forIssuer: false),
+                            Name = name,
                             File = p12Path,
                             ExpireDate = cert.NotAfter,
                             Duid = duid
