@@ -340,8 +340,11 @@ namespace Apps2Samsung.Services
 
             if (!canDelete && alreadyInstalled)
             {
-                progress?.Invoke(Constants.LocalizationKeys.AlreadyInstalled.Localized());
-                return InstallResult.FailureResult(Constants.LocalizationKeys.AlreadyInstalled.Localized());
+                var message = string.Format(
+                    Constants.LocalizationKeys.AlreadyInstalled.Localized(),
+                    GetPackageAppTitle(packageUrl));
+                progress?.Invoke(message);
+                return InstallResult.FailureResult(message);
             }
 
             if (canDelete && alreadyInstalled)
@@ -442,7 +445,7 @@ namespace Apps2Samsung.Services
                 {
                     Name = Constants.AppIdentifiers.JellyfinAppName,
                     Duid = deviceInfo.Duid,
-                    File = Path.Combine(AppSettings.CertificatePath, Constants.AppIdentifiers.JellyfinAppName, Constants.Certificate.AuthorFileName)
+                    File = Path.Combine(AppSettings.BundledCertificatePath, Constants.AppIdentifiers.JellyfinAppName, Constants.Certificate.AuthorFileName)
                 };
             }
 
@@ -549,13 +552,15 @@ namespace Apps2Samsung.Services
                 return InstallResult.FailureResult($"Installation failed: {Constants.LocalizationKeys.InsufficientSpace.Localized()}");
             }
 
-            // Handle author mismatch error
+            // Handle certificate mismatch: the installed copy was signed with a different
+            // certificate, so Tizen refuses to overwrite it. The only fix is removing the old copy.
             if (installResults.Output.Contains(Constants.TizenErrorCodes.InstallFailed118012) ||
                 installResults.Output.Contains(Constants.TizenErrorCodes.InstallFailed118Minus12))
             {
                 progress?.Invoke(Constants.LocalizationKeys.InstallationFailed.Localized());
 
-                if (_appSettings.TryOverwrite)
+                // On TVs that allow SDB uninstall, remove the old copy and reinstall automatically.
+                if (_appSettings.TryOverwrite && await GetTvDiagnoseAsync(tvIpAddress))
                 {
                     _appSettings.TryOverwrite = false;
                     _appSettings.ForceSamsungLogin = true;
@@ -563,8 +568,13 @@ namespace Apps2Samsung.Services
                     return await InstallPackageAsync(packageUrl, tvIpAddress, cancellationToken, progress, onSamsungLoginStarted);
                 }
 
+                // Overwrite can't help and the TV can't remove it over USB -> tell the user to delete it manually.
                 _appSettings.TryOverwrite = false;
-                return InstallResult.FailureResult($"Installation failed: {Constants.LocalizationKeys.AuthorMismatch.Localized()}");
+                var certMessage = string.Format(
+                    Constants.LocalizationKeys.CertificateMismatch.Localized(),
+                    GetPackageAppTitle(packageUrl));
+                progress?.Invoke(certMessage);
+                return InstallResult.FailureResult(certMessage);
             }
 
             // Handle package ID conflict error
@@ -606,7 +616,7 @@ namespace Apps2Samsung.Services
 
                 if (_appSettings.OpenAfterInstall)
                 {
-                    string tvAppId = await GetInstalledAppId(tvIpAddress, Constants.AppIdentifiers.JellyfinAppName);
+                    string tvAppId = await GetInstalledAppId(tvIpAddress, GetPackageAppTitle(packageUrl));
                     _ = Task.Run(async () =>
                     {
                         await _processHelper.RunCommandAsync(TizenSdbPath!, $"launch {tvIpAddress} \"{tvAppId}\"");
@@ -665,6 +675,14 @@ namespace Apps2Samsung.Services
             return !match.Success;
         }
 
+        /// <summary>
+        /// Best-effort display/title for the app in a package, derived from the wgt filename
+        /// (e.g. "Litefin-1.1.0.wgt" -> "Litefin"). Used for user messages and the
+        /// installed-app lookup; matches how <see cref="CheckForInstalledApp"/> searches.
+        /// </summary>
+        private static string GetPackageAppTitle(string packageUrl)
+            => Path.GetFileNameWithoutExtension(packageUrl).Split('-')[0];
+
         private async Task<(bool isInstalled, string? appId)> CheckForInstalledApp(string tvIpAddress, string packageUrl)
         {
             var result = await _processHelper.RunCommandAsync(TizenSdbPath!, $"apps {tvIpAddress}");
@@ -682,7 +700,7 @@ namespace Apps2Samsung.Services
             }
 
             // Case 1/2: listing returned -> parse TV output
-            var baseSearch = Path.GetFileNameWithoutExtension(packageUrl).Split('-')[0];
+            var baseSearch = GetPackageAppTitle(packageUrl);
             var blockRegex = RegexPatterns.TizenApp.CreateAppBlockByTitleRegex(baseSearch);
             var blockMatch = blockRegex.Match(output);
 

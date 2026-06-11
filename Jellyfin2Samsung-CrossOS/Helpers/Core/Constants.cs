@@ -215,6 +215,7 @@ namespace Apps2Samsung.Helpers.Core
             public const string InstallationSuccessful = "InstallationSuccessful";
             public const string InsufficientSpace = "insufficientSpace";
             public const string AuthorMismatch = "AuthorMismatch";
+            public const string CertificateMismatch = "certificateMismatch";
             public const string ModifyConfigRequired = "modiyConfigRequired";
             public const string FailedTizenSdb = "FailedTizenSdb";
             public const string CheckingTizenSdb = "CheckingTizenSdb";

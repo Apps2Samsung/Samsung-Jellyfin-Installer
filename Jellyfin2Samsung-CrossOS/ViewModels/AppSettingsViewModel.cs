@@ -213,7 +213,8 @@ namespace Apps2Samsung.ViewModels
 
         private async System.Threading.Tasks.Task InitializeCertificatesAsync()
         {
-            var certificates = _certificateHelper.GetAvailableCertificates(AppSettings.CertificatePath);
+            var certificates = _certificateHelper.GetAvailableCertificates(
+                AppSettings.CertificatePath, AppSettings.BundledCertificatePath);
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
