@@ -198,6 +198,8 @@ namespace Apps2Samsung.ViewModels
         {
             if (value?.IpAddress == L("lblOther"))
                 _ = PromptForManualIpAsync();
+            else if (value != null && !value.DebugPortOpen && !string.IsNullOrWhiteSpace(value.IpAddress))
+                SetStatus(DeviceNotReadyStatusKey(value)); // detected TV, but not installable yet
 
             RefreshCanExecuteChanged();
             AppSettings.Default.TvIp = value?.IpAddress ?? string.Empty;
@@ -589,6 +591,15 @@ namespace Apps2Samsung.ViewModels
         private bool CanRefreshDevices() => !IsLoadingDevices;
         private bool CanOpenSettings() => !IsLoadingDevices;
 
+        // A real TV that is actually installable: has an IP, isn't the "Other" placeholder,
+        // and its Tizen debug port (26101) is reachable. TVs detected only via the REST API
+        // (Developer Mode not fully active) are not installable.
+        private bool IsSelectedDeviceReady =>
+            SelectedDevice != null &&
+            !string.IsNullOrWhiteSpace(SelectedDevice.IpAddress) &&
+            SelectedDevice.IpAddress != L("lblOther") &&
+            SelectedDevice.DebugPortOpen;
+
         private bool CanDownload()
         {
             if (!string.IsNullOrEmpty(AppSettings.Default.CustomWgtPath))
@@ -596,15 +607,13 @@ namespace Apps2Samsung.ViewModels
                 var files = AppSettings.Default.CustomWgtPath.Split(';', StringSplitOptions.RemoveEmptyEntries);
                 return files.All(File.Exists) &&
                        !IsLoading &&
-                       SelectedDevice != null &&
-                       !string.IsNullOrWhiteSpace(SelectedDevice.IpAddress);
+                       IsSelectedDeviceReady;
             }
 
             return !IsLoading &&
                    SelectedRelease != null &&
                    SelectedAsset != null &&
-                   SelectedDevice != null &&
-                   !string.IsNullOrWhiteSpace(SelectedDevice.IpAddress);
+                   IsSelectedDeviceReady;
         }
 
 
@@ -615,15 +624,29 @@ namespace Apps2Samsung.ViewModels
             {
                 var files = AppSettings.Default.CustomWgtPath.Split(';');
                 return files.All(File.Exists) &&
-                       SelectedDevice != null &&
-                       !string.IsNullOrWhiteSpace(SelectedDevice.IpAddress);
+                       IsSelectedDeviceReady;
             }
 
             // Otherwise fallback to _downloadedPackagePath logic
             return !string.IsNullOrEmpty(_downloadedPackagePath) &&
                    File.Exists(_downloadedPackagePath) &&
-                   SelectedDevice != null &&
-                   !string.IsNullOrWhiteSpace(SelectedDevice.IpAddress);
+                   IsSelectedDeviceReady;
+        }
+
+        // Actionable status-bar message for a TV that was detected but isn't installable yet
+        // (debug port closed). Picks the right guidance from what /api/v2/ reported.
+        private static string DeviceNotReadyStatusKey(NetworkDevice device)
+        {
+            if (!string.Equals(device.DeveloperMode, "1", StringComparison.Ordinal))
+                return "DevNotReadyEnableDevMode";
+
+            var localIp = AppSettings.Default.LocalIp;
+            if (!string.IsNullOrEmpty(device.DeveloperIP) &&
+                !string.IsNullOrEmpty(localIp) &&
+                !string.Equals(device.DeveloperIP, localIp, StringComparison.Ordinal))
+                return "DevNotReadyIpMismatch";
+
+            return "DevNotReadyPowerCycle";
         }
 
 
@@ -769,13 +792,19 @@ namespace Apps2Samsung.ViewModels
                 }
                 else
                 {
-                    SetStatus("Ready");
+                    // "Ready" only if something is actually installable; otherwise guide the user
+                    // on the first detected-but-not-ready TV (debug port closed).
+                    var firstNotReady = AvailableDevices.FirstOrDefault(d => !d.DebugPortOpen);
+                    if (AvailableDevices.Any(d => d.DebugPortOpen) || firstNotReady == null)
+                        SetStatus("Ready");
+                    else
+                        SetStatus(DeviceNotReadyStatusKey(firstNotReady));
                 }
 
                 if (AvailableDevices.Any())
                 {
                     if (SelectedDevice == null)
-                        SelectedDevice = AvailableDevices[0];
+                        SelectedDevice = AvailableDevices.FirstOrDefault(d => d.DebugPortOpen) ?? AvailableDevices[0];
                     else if (!string.IsNullOrEmpty(selectedIp))
                     {
                         var previousDevice = AvailableDevices.FirstOrDefault(it => it.IpAddress == selectedIp);

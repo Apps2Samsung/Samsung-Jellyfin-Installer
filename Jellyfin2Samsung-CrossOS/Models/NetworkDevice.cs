@@ -9,20 +9,27 @@
         public string? DeveloperMode { get; set; }
         public string? DeveloperIP { get; set; }
 
+        // True when the Tizen debug/sdb port (26101) is reachable — i.e. the TV is ready to
+        // install to. False for TVs detected only via the 8001 REST API (Developer Mode not
+        // fully active yet); those are shown with a warning marker but are not installable.
+        public bool DebugPortOpen { get; set; } = true;
+
         public string DisplayText
         {
             get
             {
+                var prefix = DebugPortOpen ? string.Empty : "⚠ ";
+
                 if (DeviceName is not null && ModelName is not null)
-                    return $"{IpAddress} | {ModelName} | {DeviceName}";
+                    return $"{prefix}{IpAddress} | {ModelName} | {DeviceName}";
 
                 if (DeviceName is not null)
-                    return $"{IpAddress} | {DeviceName}";
+                    return $"{prefix}{IpAddress} | {DeviceName}";
 
                 if (Manufacturer is not null)
-                    return $"{IpAddress} | {Manufacturer}";
+                    return $"{prefix}{IpAddress} | {Manufacturer}";
 
-                return IpAddress;
+                return $"{prefix}{IpAddress}";
             }
         }
     }
