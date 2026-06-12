@@ -24,7 +24,15 @@ namespace Apps2Samsung.Helpers
         // Pre-2.5.1 location: next to the binary. Used once to migrate existing users' settings.
         private static readonly string LegacyFilePath = Path.Combine(FolderPath, FileName);
         public static readonly string TizenSdbPath = Path.Combine(FolderPath, "Assets", "TizenSDB");
-        public static readonly string CertificatePath = Path.Combine(FolderPath, "Assets", "Certificate");
+
+        // Generated signing certificates live in the per-user data dir so they survive app/bundle
+        // updates. A macOS .dmg (or an installer) replaces the whole install folder/bundle; if the
+        // author cert lived there it would be wiped, a new one generated, and already-installed apps
+        // could no longer be overwritten ("same id, different certificate").
+        public static readonly string CertificatePath = Path.Combine(DataFolderPath, "Certificate");
+        // Shipped, read-only default certificate(s) that ride along inside the install folder/bundle.
+        public static readonly string BundledCertificatePath = Path.Combine(FolderPath, "Assets", "Certificate");
+
         public static readonly string ProfilePath = Path.Combine(FolderPath, "Assets", "TizenProfile");
         public static readonly string EsbuildPath = Path.Combine(FolderPath, "Assets", "esbuild");
         public static readonly string DownloadPath = Path.Combine(FolderPath, "Downloads");
@@ -92,6 +100,8 @@ namespace Apps2Samsung.Helpers
         public string LocalYoutubeServer { get; set; } = string.Empty;
         public string TvAppChannelsJson { get; set; } = "";  // JSON array of {name,url} for TVApp
         public bool TvAppUseOblongIcon { get; set; } = false;  // swap TVApp's icon for the 16:9 Tizen 5.5 variant
+        public bool LitefinUseOblongIcon { get; set; } = false;  // swap Litefin's icon for the 16:9 Tizen 5.5 variant
+        public string ManualDuids { get; set; } = "";  // extra Tizen DUIDs to pre-authorize in the distributor cert (one per line / comma-separated)
 
         // ----- Updater settings -----
         public bool CheckForUpdatesOnStartup { get; set; } = true;
@@ -106,7 +116,7 @@ namespace Apps2Samsung.Helpers
         [JsonIgnore]
         public string AuthorEndpoint { get; set; } = "https://dev.tizen.samsung.com/apis/v2/authors";
         [JsonIgnore]
-        public string AppVersion { get; set; } = "v2.5.3";
+        public string AppVersion { get; set; } = "v2.5.4";
         [JsonIgnore]
         public string TizenSdb { get; set; } = "https://api.github.com/repos/PatrickSt1991/tizen-sdb/releases";
         [JsonIgnore]
@@ -155,6 +165,8 @@ namespace Apps2Samsung.Helpers
 
         public static AppSettings Load()
         {
+            MigrateCertificatesIfNeeded();
+
             try
             {
                 // One-time migration: if no settings exist in the new per-user location but a
@@ -185,6 +197,40 @@ namespace Apps2Samsung.Helpers
             }
 
             return _instance ??= new AppSettings();
+        }
+
+        /// <summary>
+        /// One-time move of the user's generated signing cert from the old in-bundle location
+        /// (<see cref="BundledCertificatePath"/>/Jelly2Sams) to the per-user data dir, so it isn't
+        /// lost on the next app/bundle update. The shipped default cert stays in the bundle.
+        /// On bundle-replacing updates the old copy may already be gone — then this is a no-op and
+        /// a fresh cert is generated once on the next install.
+        /// </summary>
+        private static void MigrateCertificatesIfNeeded()
+        {
+            try
+            {
+                var legacyGenerated = Path.Combine(BundledCertificatePath, "Jelly2Sams");
+                var newGenerated = Path.Combine(CertificatePath, "Jelly2Sams");
+
+                if (Directory.Exists(legacyGenerated) && !Directory.Exists(newGenerated))
+                    CopyDirectory(legacyGenerated, newGenerated);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.WriteLine($"Certificate migration failed: {ex.Message}");
+            }
+        }
+
+        private static void CopyDirectory(string source, string dest)
+        {
+            Directory.CreateDirectory(dest);
+            foreach (var file in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
+            {
+                var target = Path.Combine(dest, Path.GetRelativePath(source, file));
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.Copy(file, target, overwrite: true);
+            }
         }
     }
 }

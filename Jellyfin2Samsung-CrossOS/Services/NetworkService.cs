@@ -107,11 +107,27 @@ namespace Apps2Samsung.Services
                                     device.DeviceName = await _tizenInstaller.GetTvNameAsync(ip);
                                 }
                             }
+                            // Debug port closed, but the TV REST API (8001) answers: the TV is
+                            // there but not ready (Developer Mode not fully active). Surface it as
+                            // "not ready" so the user gets an actionable hint instead of "no devices".
+                            // DeviceHelper enriches it via /api/v2/ (name, developerMode, developerIP).
+                            else if (await IsPortOpenAsync(ip, Constants.Ports.SamsungTvApiPort, linkedCts.Token))
+                            {
+                                var device = new NetworkDevice
+                                {
+                                    IpAddress = ip,
+                                    DebugPortOpen = false
+                                };
+                                lock (lockObject)
+                                {
+                                    foundDevices.Add(device);
+                                }
+                            }
                         }
                         catch { /* Ignore scan failures */ }
                     })));
 
-            Trace.WriteLine($"Scan complete! Found {foundDevices.Count} devices with port {Constants.Ports.TizenDevPort} open.");
+            Trace.WriteLine($"Scan complete! Found {foundDevices.Count} device(s) (debug port {Constants.Ports.TizenDevPort} or REST API {Constants.Ports.SamsungTvApiPort}).");
             return foundDevices;
         }
         public IEnumerable<IPAddress> GetRelevantLocalIPs(bool virtualScan = false)

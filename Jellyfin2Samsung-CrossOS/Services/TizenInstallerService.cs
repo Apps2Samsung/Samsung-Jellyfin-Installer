@@ -3,6 +3,7 @@ using Apps2Samsung.Helpers;
 using Apps2Samsung.Helpers.API;
 using Apps2Samsung.Helpers.Core;
 using Apps2Samsung.Helpers.Jellyfin;
+using Apps2Samsung.Helpers.Tizen.Certificate;
 using Apps2Samsung.Interfaces;
 using Apps2Samsung.Models;
 using System;
@@ -11,6 +12,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -255,6 +257,17 @@ namespace Apps2Samsung.Services
                     }
                 }
 
+                // Step 3b: Older TVs (below Tizen 4.0) can't install a bundled background
+                // <tizen:service> component — the whole package is rejected with a generic
+                // install failed[118] (see #400). Only on those TVs, strip the service so
+                // the main app still installs. Newer TVs keep the package untouched.
+                var serviceSupport = new Version(Constants.TizenVersions.ServiceComponentSupport);
+                if (deviceInfo.TizenVersion < serviceSupport && await FileHelper.WgtContainsService(packageUrl))
+                {
+                    if (await FileHelper.StripWgtServiceComponent(packageUrl))
+                        Trace.WriteLine($"Device Tizen {deviceInfo.TizenVersion} < {serviceSupport}: removed bundled background service so the package can install");
+                }
+
                 // Step 4: Handle certificate selection/generation
                 var certificateResult = await HandleCertificateAsync(
                     tvIpAddress,
@@ -340,8 +353,11 @@ namespace Apps2Samsung.Services
 
             if (!canDelete && alreadyInstalled)
             {
-                progress?.Invoke(Constants.LocalizationKeys.AlreadyInstalled.Localized());
-                return InstallResult.FailureResult(Constants.LocalizationKeys.AlreadyInstalled.Localized());
+                var message = string.Format(
+                    Constants.LocalizationKeys.AlreadyInstalled.Localized(),
+                    GetPackageAppTitle(packageUrl));
+                progress?.Invoke(message);
+                return InstallResult.FailureResult(message);
             }
 
             if (canDelete && alreadyInstalled)
@@ -442,43 +458,54 @@ namespace Apps2Samsung.Services
                 {
                     Name = Constants.AppIdentifiers.JellyfinAppName,
                     Duid = deviceInfo.Duid,
-                    File = Path.Combine(AppSettings.CertificatePath, Constants.AppIdentifiers.JellyfinAppName, Constants.Certificate.AuthorFileName)
+                    File = Path.Combine(AppSettings.BundledCertificatePath, Constants.AppIdentifiers.JellyfinAppName, Constants.Certificate.AuthorFileName)
                 };
             }
 
             string authorp12, distributorp12, p12Password;
 
-            // Determine if Samsung login is needed
-            bool needsSamsungLogin = string.IsNullOrEmpty(selectedCertificate) ||
-                                     selectedCertificate == Constants.AppIdentifiers.Jelly2SamsDefault ||
-                                     (deviceInfo.Duid != certDuid && selectedCertificate != Constants.AppIdentifiers.JellyfinAppName) ||
-                                     _appSettings.ForceSamsungLogin;
+            var jelly2SamsDir = Path.Combine(AppSettings.CertificatePath, Constants.AppIdentifiers.Jelly2Sams);
+            bool hasAuthor = HasUsableAuthorCert(jelly2SamsDir);
 
-            if (needsSamsungLogin)
+            // Older Tizen TVs use the shipped "Jellyfin" certificate (set just above) — it's always
+            // present and never regenerated, so it bypasses all Samsung-login / regeneration logic
+            // and is just reused from disk (unless the user forces a fresh login).
+            bool isBundledJellyfin = selectedCertificate == Constants.AppIdentifiers.JellyfinAppName;
+
+            // A full Samsung profile (fresh keypair + new author cert) is only needed on first run,
+            // when no real cert is selected, when the generated author cert is missing/expired, or
+            // when forced. The bundled "Jellyfin" cert never needs one.
+            bool needsFullProfile = string.IsNullOrEmpty(selectedCertificate) ||
+                                    selectedCertificate == Constants.AppIdentifiers.Jelly2SamsDefault ||
+                                    _appSettings.ForceSamsungLogin ||
+                                    (!isBundledJellyfin && !hasAuthor);
+
+            // DUIDs the user manually pre-authorized + DUIDs already covered by the current
+            // distributor cert. One distributor cert can cover several TVs (multiple device-id
+            // SAN entries), so we only regenerate when a needed DUID isn't covered yet.
+            var manualDuids = ParseDuids(_appSettings.ManualDuids);
+            var coveredDuids = (hasAuthor && !isBundledJellyfin)
+                ? GetCoveredDuids(jelly2SamsDir)
+                : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            bool duidsCovered = coveredDuids.Contains(deviceInfo.Duid) &&
+                                manualDuids.All(coveredDuids.Contains);
+
+            // Generated author cert exists but the distributor cert doesn't yet cover this TV (or a
+            // newly-added manual DUID): regenerate ONLY the distributor (reusing the author keypair)
+            // so the author identity stays byte-identical and apps on other TVs stay overwritable.
+            bool needsDistributorOnly = !needsFullProfile &&
+                                        !isBundledJellyfin &&
+                                        !duidsCovered;
+
+            if (needsFullProfile || needsDistributorOnly)
             {
                 progress?.Invoke(Constants.LocalizationKeys.SamsungLogin.Localized());
                 onSamsungLoginStarted?.Invoke();
 
                 SamsungAuth auth = await SamsungLoginService.PerformSamsungLoginAsync(cancellationToken);
 
-                if (!string.IsNullOrEmpty(auth.access_token))
-                {
-                    progress?.Invoke(Constants.LocalizationKeys.CreatingCertificateProfile.Localized());
-
-                    var certificateService = new TizenCertificateService(_httpClient, _dialogService);
-                    (authorp12, distributorp12, p12Password) = await certificateService.GenerateProfileAsync(
-                        duid: deviceInfo.Duid,
-                        accessToken: auth.access_token,
-                        userId: auth.userId,
-                        userEmail: auth.inputEmailID,
-                        outputPath: Path.Combine(AppSettings.CertificatePath, Constants.AppIdentifiers.Jelly2Sams),
-                        progress);
-
-                    PackageCertificate = Constants.AppIdentifiers.Jelly2Sams;
-                    _appSettings.Certificate = PackageCertificate;
-                    _appSettings.Save();
-                }
-                else
+                if (string.IsNullOrEmpty(auth.access_token))
                 {
                     await _dialogService.ShowErrorAsync("Failed to authenticate with Samsung account.");
                     return new CertificateResult
@@ -487,6 +514,48 @@ namespace Apps2Samsung.Services
                         InstallResult = InstallResult.FailureResult("Auth failed.")
                     };
                 }
+
+                progress?.Invoke(Constants.LocalizationKeys.CreatingCertificateProfile.Localized());
+                var certificateService = new TizenCertificateService(_httpClient, _dialogService);
+
+                // Union of DUIDs the (re)generated distributor cert should cover: this TV first,
+                // then manual entries, then already-covered ones — capped at Samsung's per-cert limit.
+                var duids = BuildDistributorDuids(deviceInfo.Duid, manualDuids, coveredDuids, progress);
+
+                if (needsFullProfile)
+                {
+                    (authorp12, distributorp12, p12Password) = await certificateService.GenerateProfileAsync(
+                        duids: duids,
+                        accessToken: auth.access_token,
+                        userId: auth.userId,
+                        userEmail: auth.inputEmailID,
+                        outputPath: jelly2SamsDir,
+                        progress);
+                }
+                else
+                {
+                    // Reuse the existing author cert; only the distributor cert is regenerated.
+                    distributorp12 = await certificateService.RegenerateDistributorAsync(
+                        certDir: jelly2SamsDir,
+                        duids: duids,
+                        accessToken: auth.access_token,
+                        userId: auth.userId,
+                        userEmail: auth.inputEmailID,
+                        progress);
+                    authorp12 = Path.Combine(jelly2SamsDir, Constants.Certificate.AuthorFileName);
+                    p12Password = (await File.ReadAllTextAsync(
+                        Path.Combine(jelly2SamsDir, Constants.Certificate.PasswordFileName))).Trim();
+                }
+
+                PackageCertificate = Constants.AppIdentifiers.Jelly2Sams;
+                _appSettings.Certificate = PackageCertificate;
+                _appSettings.ChosenCertificates = new ExistingCertificates
+                {
+                    Name = Constants.AppIdentifiers.Jelly2Sams,
+                    Duid = deviceInfo.Duid,
+                    File = authorp12
+                };
+                _appSettings.Save();
             }
             else
             {
@@ -516,6 +585,89 @@ namespace Apps2Samsung.Services
                 DistributorP12 = distributorp12,
                 P12Password = p12Password
             };
+        }
+
+        // True when a generated author cert exists and is still valid — i.e. we can keep that
+        // author identity and only regenerate the distributor cert for a new TV.
+        private static bool HasUsableAuthorCert(string certDir)
+        {
+            try
+            {
+                var authorP12 = Path.Combine(certDir, Constants.Certificate.AuthorFileName);
+                var passwordFile = Path.Combine(certDir, Constants.Certificate.PasswordFileName);
+                if (!File.Exists(authorP12) || !File.Exists(passwordFile))
+                    return false;
+
+                var password = File.ReadAllText(passwordFile).Trim();
+                using var cert = new X509Certificate2(authorP12, password, X509KeyStorageFlags.Exportable);
+                return cert.NotAfter.Date >= DateTime.Today;
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"[Cert] Author cert check failed for '{certDir}': {ex.Message}");
+                return false;
+            }
+        }
+
+        // Parses a user-entered list of DUIDs (one per line / comma / space separated).
+        private static HashSet<string> ParseDuids(string? raw)
+        {
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(raw))
+                return set;
+
+            foreach (var part in raw.Split(new[] { '\n', '\r', ',', ';', ' ', '\t' },
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                set.Add(part);
+
+            return set;
+        }
+
+        // DUIDs already covered by the distributor cert in certDir (empty if missing/unreadable).
+        private static HashSet<string> GetCoveredDuids(string certDir)
+        {
+            try
+            {
+                var passwordFile = Path.Combine(certDir, Constants.Certificate.PasswordFileName);
+                if (!File.Exists(passwordFile))
+                    return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                var password = File.ReadAllText(passwordFile).Trim();
+                var distributor = Path.Combine(certDir, Constants.Certificate.DistributorFileName);
+                return new CertificateHelper().GetCertificateDuids(distributor, password);
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"[Cert] Could not read covered DUIDs from '{certDir}': {ex.Message}");
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
+        }
+
+        // The DUID set a (re)generated distributor cert should cover: this TV first, then manual
+        // entries, then already-covered ones — capped at Samsung's per-cert limit (extras dropped).
+        private static IReadOnlyCollection<string> BuildDistributorDuids(
+            string currentDuid, HashSet<string> manual, HashSet<string> covered, ProgressCallback? progress)
+        {
+            var ordered = new List<string>();
+            void Add(string d)
+            {
+                if (!string.IsNullOrWhiteSpace(d) && !ordered.Contains(d, StringComparer.OrdinalIgnoreCase))
+                    ordered.Add(d.Trim());
+            }
+
+            Add(currentDuid);
+            foreach (var d in manual) Add(d);
+            foreach (var d in covered) Add(d);
+
+            int max = Constants.Certificate.MaxDistributorDuids;
+            if (ordered.Count > max)
+            {
+                progress?.Invoke(string.Format(Constants.LocalizationKeys.DuidLimitReached.Localized(), max));
+                Trace.WriteLine($"[Cert] DUID count {ordered.Count} exceeds limit {max}; dropping extras.");
+                ordered = ordered.Take(max).ToList();
+            }
+
+            return ordered;
         }
 
         #endregion
@@ -549,13 +701,15 @@ namespace Apps2Samsung.Services
                 return InstallResult.FailureResult($"Installation failed: {Constants.LocalizationKeys.InsufficientSpace.Localized()}");
             }
 
-            // Handle author mismatch error
+            // Handle certificate mismatch: the installed copy was signed with a different
+            // certificate, so Tizen refuses to overwrite it. The only fix is removing the old copy.
             if (installResults.Output.Contains(Constants.TizenErrorCodes.InstallFailed118012) ||
                 installResults.Output.Contains(Constants.TizenErrorCodes.InstallFailed118Minus12))
             {
                 progress?.Invoke(Constants.LocalizationKeys.InstallationFailed.Localized());
 
-                if (_appSettings.TryOverwrite)
+                // On TVs that allow SDB uninstall, remove the old copy and reinstall automatically.
+                if (_appSettings.TryOverwrite && await GetTvDiagnoseAsync(tvIpAddress))
                 {
                     _appSettings.TryOverwrite = false;
                     _appSettings.ForceSamsungLogin = true;
@@ -563,11 +717,18 @@ namespace Apps2Samsung.Services
                     return await InstallPackageAsync(packageUrl, tvIpAddress, cancellationToken, progress, onSamsungLoginStarted);
                 }
 
+                // Overwrite can't help and the TV can't remove it over USB -> tell the user to delete it manually.
                 _appSettings.TryOverwrite = false;
-                return InstallResult.FailureResult($"Installation failed: {Constants.LocalizationKeys.AuthorMismatch.Localized()}");
+                var certMessage = string.Format(
+                    Constants.LocalizationKeys.CertificateMismatch.Localized(),
+                    GetPackageAppTitle(packageUrl));
+                progress?.Invoke(certMessage);
+                return InstallResult.FailureResult(certMessage);
             }
 
-            // Handle package ID conflict error
+            // Handle package ID conflict error. Note: a service-component incompatibility
+            // (the common cause on older TVs) is already handled before install in Step 3b,
+            // so reaching here generally means a genuine id/config conflict.
             if (installResults.Output.Contains(Constants.TizenErrorCodes.InstallFailed118))
             {
                 progress?.Invoke(Constants.LocalizationKeys.InstallationFailed.Localized());
@@ -606,7 +767,7 @@ namespace Apps2Samsung.Services
 
                 if (_appSettings.OpenAfterInstall)
                 {
-                    string tvAppId = await GetInstalledAppId(tvIpAddress, Constants.AppIdentifiers.JellyfinAppName);
+                    string tvAppId = await GetInstalledAppId(tvIpAddress, GetPackageAppTitle(packageUrl));
                     _ = Task.Run(async () =>
                     {
                         await _processHelper.RunCommandAsync(TizenSdbPath!, $"launch {tvIpAddress} \"{tvAppId}\"");
@@ -665,6 +826,14 @@ namespace Apps2Samsung.Services
             return !match.Success;
         }
 
+        /// <summary>
+        /// Best-effort display/title for the app in a package, derived from the wgt filename
+        /// (e.g. "Litefin-1.1.0.wgt" -> "Litefin"). Used for user messages and the
+        /// installed-app lookup; matches how <see cref="CheckForInstalledApp"/> searches.
+        /// </summary>
+        private static string GetPackageAppTitle(string packageUrl)
+            => Path.GetFileNameWithoutExtension(packageUrl).Split('-')[0];
+
         private async Task<(bool isInstalled, string? appId)> CheckForInstalledApp(string tvIpAddress, string packageUrl)
         {
             var result = await _processHelper.RunCommandAsync(TizenSdbPath!, $"apps {tvIpAddress}");
@@ -682,7 +851,7 @@ namespace Apps2Samsung.Services
             }
 
             // Case 1/2: listing returned -> parse TV output
-            var baseSearch = Path.GetFileNameWithoutExtension(packageUrl).Split('-')[0];
+            var baseSearch = GetPackageAppTitle(packageUrl);
             var blockRegex = RegexPatterns.TizenApp.CreateAppBlockByTitleRegex(baseSearch);
             var blockMatch = blockRegex.Match(output);
 
